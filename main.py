@@ -2,17 +2,13 @@ import pandas as pd
 
 def tokenization(tweet):
     tokens=[]
+    ponctuation=[".",";","!",",",":","-"]
+    for p in ponctuation:
+        tweet=tweet.replace(p," ")
     for word in tweet.split():
-        if "." in word:
-            if word==".":
-                continue
-            else:
-                sub_words=word.split(".")
-                for sub_word in sub_words:
-                    if sub_word!="":
-                        print("sub word of ",word," ",sub_word)
-                        tokens.append(sub_word.lower())
-        if word[0]=="@":
+        if word.isdigit():
+            continue
+        elif word[0]=="@":
             word=word[1:]
             tokens.append(word.lower())
         elif word[0]=="#":
@@ -28,6 +24,8 @@ def tokenization(tweet):
                     tokens.append(word[start_index:].lower())
                 else:
                     continue
+        else:
+            tokens.append(word.lower())
     return tokens
 
 data=[]
@@ -40,5 +38,8 @@ with open("./train.txt","r") as file:
         tokens=tokenization(tweet)
         data.append((tag,company,tokens))
 
+""" #test
 df=pd.DataFrame(data,columns=["Tag","Company","Tweet"])
-print(df.head(n=100))
+for i,r in df.iterrows():
+    print(r["Tweet"])
+"""
