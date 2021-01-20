@@ -13,8 +13,8 @@ def tokenization(tweet):
                 if letter.isupper():
                     if i!=0:
                         tokens.append(word[start_index:i])
-                    else:
-                        start_index=i
+                    start_index=i
+                        
                 elif i==len(word)-1:
                     tokens.append(word[start_index:])
                 else:
@@ -32,4 +32,4 @@ with open("./train.txt","r") as file:
         data.append((type_tweet,company,tokens))
 
 df=pd.DataFrame(data,columns=["Type","Company","Tweet"])
-print(df.head(n=10))
+
