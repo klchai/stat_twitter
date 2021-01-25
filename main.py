@@ -5,7 +5,7 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 
 def tokenization(tweet):
     tokens=[]
-    ponctuation=[".",";","!",",",":","-"]
+    ponctuation=[".",";","!",",","-","\n"]
     for p in ponctuation:
         tweet=tweet.replace(p," ")
     for word in tweet.split():
@@ -14,6 +14,8 @@ def tokenization(tweet):
         else:
             contains_digit=any(map(str.isdigit,word))
             if contains_digit:
+                continue
+            elif word.startswith("http://") or word.startswith("https://"):
                 continue
             elif word[0]=="@":
                 word=word[1:]
