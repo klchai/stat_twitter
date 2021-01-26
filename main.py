@@ -18,18 +18,21 @@ def tokenization(tweet):
             elif word.startswith("http://") or word.startswith("https://"):
                 continue
             elif word[0]=="@":
-                word=word[1:]
-                tokens.append(word.lower())
+                word=word[1:].lower()
+                dico.add(word)
+                tokens.append(word)
             elif word[0]=="#":
                 word=word[1:]
                 start_index=0
                 for i,letter in enumerate(word):
                     if letter.isupper():
                         if i!=0:
+                            dico.add(word[start_index:i].lower())
                             tokens.append(word[start_index:i].lower())
                         start_index=i
                             
                     elif i==len(word)-1:
+                        dico.add(word[start_index:].lower())
                         tokens.append(word[start_index:].lower())
                     else:
                         continue
@@ -37,6 +40,7 @@ def tokenization(tweet):
                 tokens.append(word.lower())
     return tokens
 
+dico=set()
 X=[]
 y=[]
 with open("./train.txt","r") as file:
@@ -46,15 +50,23 @@ with open("./train.txt","r") as file:
         company=company[:-1]
         tokens=tokenization(tweet)
         X.append(tokens)
+        """
         if tag=="pos":
             m=1
         elif tag=="neg":
             m=-1
         else:
             m=0
-        y.append(m)
+        """
+        y.append(tag)
 
-X_train, X_test, y_train, y_test = train_test_split(X, y,test_size=0.2,random_state=0)
+vectors=[]
+for tweet in X:
+    vector=[0 if word in tweet else 1 for word in dico]
+    vectors.append(vector)
+
+
+X_train, X_test, y_train, y_test = train_test_split(vectors,y,test_size=0.2,random_state=0)
 classifier = RandomForestClassifier(n_estimators=20, random_state=0)
 classifier.fit(X_train, y_train)
 y_pred = classifier.predict(X_test)
@@ -62,10 +74,3 @@ y_pred = classifier.predict(X_test)
 print(confusion_matrix(y_test,y_pred))
 print(classification_report(y_test,y_pred))
 print(accuracy_score(y_test, y_pred))
-
-
-""" #test
-df=pd.DataFrame(data,columns=["Tag","Company","Tweet"])
-for i,r in df.iterrows():
-    print(r["Tweet"])
-"""
