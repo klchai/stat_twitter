@@ -50,19 +50,11 @@ with open("./train.txt","r") as file:
         company=company[:-1]
         tokens=tokenization(tweet)
         X.append(tokens)
-        """
-        if tag=="pos":
-            m=1
-        elif tag=="neg":
-            m=-1
-        else:
-            m=0
-        """
         y.append(tag)
 
 vectors=[]
 for tweet in X:
-    vector=[0 if word in tweet else 1 for word in dico]
+    vector=[1 if word in tweet else 0 for word in dico]
     vectors.append(vector)
 
 
