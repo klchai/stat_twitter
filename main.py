@@ -3,7 +3,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn import svm
-from sklearn.model_selection import cross_val_score
+from sklearn.model_selection import cross_val_score, GridSearchCV
 
 def tokenization(tweet):
     tokens=[]
@@ -64,24 +64,49 @@ for tweet in X:
 
 
 X_train, X_test, y_train, y_test = train_test_split(vectors,y,test_size=0.2,random_state=0)
-classifier = RandomForestClassifier(n_estimators=20, random_state=0)
-classifier.fit(X_train, y_train)
-y_pred = classifier.predict(X_test)
+rf1 = RandomForestClassifier(n_estimators=20, random_state=0)
+rf1.fit(X_train, y_train)
+rf1_y_pred = rf1.predict(X_test)
 
-print(confusion_matrix(y_test,y_pred))
-print(classification_report(y_test,y_pred))
-print(accuracy_score(y_test, y_pred))
+print("Random Forest 1 (20 est)")
+print(confusion_matrix(y_test,rf1_y_pred))
+print(classification_report(y_test,rf1_y_pred))
+print("Accuracy:", accuracy_score(y_test, rf1_y_pred))
 
-svc = svm.SVC()
+rf2 = RandomForestClassifier(n_estimators=40, random_state=0)
+rf2.fit(X_train, y_train)
+rf2_y_pred = rf2.predict(X_test)
+
+print("Random Forest 2 (40 est)")
+print(confusion_matrix(y_test,rf2_y_pred))
+print(classification_report(y_test,rf2_y_pred))
+print("Accuracy:", accuracy_score(y_test, rf2_y_pred))
+
+def find_best_RF(max):
+    param_test1 = {'n_estimators':range(10,max,10)}
+    gsearch1 = GridSearchCV(
+        estimator = RandomForestClassifier(
+            random_state=0
+        ), param_grid = param_test1, scoring='f1_macro',cv=3)
+    gsearch1.fit(X_train, y_train)
+    print(gsearch1.best_params_, gsearch1.best_score_)
+
+# find_best_RF(61)
+
+svc = svm.SVC(kernel='rbf')
+print("Fitting SVC Model...")
 svc.fit(X_train, y_train)
-print("Fitting Modele SVC")
 svc_y_pred = svc.predict(X_test)
 
-print(svc.score(X_test, y_test))
 print(confusion_matrix(y_test, svc_y_pred))
 print(classification_report(y_test, svc_y_pred))
-print(accuracy_score(y_test, svc_y_pred))
+print("Accuracy:", accuracy_score(y_test, svc_y_pred))
 
-cv_RF = cross_val_score(classifier, X_test, y_test, cv=10)
-cv_SVC = cross_val_score(svc, X_test, y_test, cv=10)
-print("RandomForest: {}, SVM Classifier: {}".format(cv_RF.mean(),cv_SVC.mean()))
+def evaluate_cv(model1, model2, model3):
+    cv_RF1 = cross_val_score(model1, X_test, y_test, cv=10)
+    cv_RF2 = cross_val_score(model2, X_test, y_test, cv=10)
+    cv_SVC = cross_val_score(model3, X_test, y_test, cv=10)
+    print("RF1: {}, RF2: {}, SVM: {}".format(cv_RF1.mean(), cv_RF2.mean(), cv_SVC.mean()))
+
+print("Evaluation of models:")
+evaluate_cv(rf1, rf2, svc)
