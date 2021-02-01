@@ -2,6 +2,8 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn import svm
+from sklearn.model_selection import cross_val_score
 
 def tokenization(tweet):
     tokens=[]
@@ -69,3 +71,17 @@ y_pred = classifier.predict(X_test)
 print(confusion_matrix(y_test,y_pred))
 print(classification_report(y_test,y_pred))
 print(accuracy_score(y_test, y_pred))
+
+svc = svm.SVC()
+svc.fit(X_train, y_train)
+print("Fitting Modele SVC")
+svc_y_pred = svc.predict(X_test)
+
+print(svc.score(X_test, y_test))
+print(confusion_matrix(y_test, svc_y_pred))
+print(classification_report(y_test, svc_y_pred))
+print(accuracy_score(y_test, svc_y_pred))
+
+cv_RF = cross_val_score(classifier, X_test, y_test, cv=10)
+cv_SVC = cross_val_score(svc, X_test, y_test, cv=10)
+print("RandomForest: {}, SVM Classifier: {}".format(cv_RF.mean(),cv_SVC.mean()))
