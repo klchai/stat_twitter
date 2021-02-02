@@ -4,6 +4,10 @@ from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 from sklearn import svm
 from sklearn.model_selection import cross_val_score, GridSearchCV
+from sklearn.ensemble import StackingClassifier
+# from sklearn.linear_model import LogisticRegression
+from sklearn import model_selection
+from sklearn.naive_bayes import GaussianNB 
 
 def tokenization(tweet):
     tokens=[]
@@ -62,51 +66,66 @@ for tweet in X:
     vector=[1 if word in tweet else 0 for word in dico]
     vectors.append(vector)
 
-
 X_train, X_test, y_train, y_test = train_test_split(vectors,y,test_size=0.2,random_state=0)
-rf1 = RandomForestClassifier(n_estimators=20, random_state=0)
-rf1.fit(X_train, y_train)
-rf1_y_pred = rf1.predict(X_test)
 
-print("Random Forest 1 (20 est)")
-print(confusion_matrix(y_test,rf1_y_pred))
-print(classification_report(y_test,rf1_y_pred))
-print("Accuracy:", accuracy_score(y_test, rf1_y_pred))
+def evaluate_model(model, show_detail=False):
+    y_pred = model.predict(X_test)
+    if show_detail:
+        print(confusion_matrix(y_test, y_pred))
+        print(classification_report(y_test, y_pred))
+    print("Accuracy:", accuracy_score(y_test, y_pred))
+    ev = cross_val_score(model, X_test, y_test, cv=3)
+    print("3 Fold Cross Validation, accuracy:",ev.mean())
 
-rf2 = RandomForestClassifier(n_estimators=40, random_state=0)
-rf2.fit(X_train, y_train)
-rf2_y_pred = rf2.predict(X_test)
+rf = RandomForestClassifier(n_estimators=40, random_state=0)
+rf.fit(X_train, y_train)
 
-print("Random Forest 2 (40 est)")
-print(confusion_matrix(y_test,rf2_y_pred))
-print(classification_report(y_test,rf2_y_pred))
-print("Accuracy:", accuracy_score(y_test, rf2_y_pred))
+print("Random Forest (40 est)")
+evaluate_model(rf)
 
 def find_best_RF(max):
     param_test1 = {'n_estimators':range(10,max,10)}
     gsearch1 = GridSearchCV(
-        estimator = RandomForestClassifier(
-            random_state=0
-        ), param_grid = param_test1, scoring='f1_macro',cv=3)
+        estimator = RandomForestClassifier(random_state=0), 
+        param_grid = param_test1, scoring='f1_macro', cv=3)
     gsearch1.fit(X_train, y_train)
     print(gsearch1.best_params_, gsearch1.best_score_)
 
-# find_best_RF(61)
+# find_best_RF(61) -> best_param:40 trees
 
 svc = svm.SVC(kernel='rbf')
 print("Fitting SVC Model...")
 svc.fit(X_train, y_train)
-svc_y_pred = svc.predict(X_test)
 
-print(confusion_matrix(y_test, svc_y_pred))
-print(classification_report(y_test, svc_y_pred))
-print("Accuracy:", accuracy_score(y_test, svc_y_pred))
+print("SVC model")
+evaluate_model(svc)
 
-def evaluate_cv(model1, model2, model3):
-    cv_RF1 = cross_val_score(model1, X_test, y_test, cv=10)
-    cv_RF2 = cross_val_score(model2, X_test, y_test, cv=10)
-    cv_SVC = cross_val_score(model3, X_test, y_test, cv=10)
-    print("RF1: {}, RF2: {}, SVM: {}".format(cv_RF1.mean(), cv_RF2.mean(), cv_SVC.mean()))
+def StackingMethod(X,y):
+    features_train, features_test, target_train, target_test = model_selection.train_test_split(X, y, test_size = 0.2, random_state = 0)
+    
+    clf1 = RandomForestClassifier(n_estimators=40, random_state=0)
+    clf2 = svm.SVC(kernel='rbf')
+    # clf3 = GaussianNB()
 
-print("Evaluation of models:")
-evaluate_cv(rf1, rf2, svc)
+    estim_models = [
+        ('Random Forest', clf1),
+        ('SVM', clf2),
+    ]
+
+    sclf = StackingClassifier(estimators=estim_models, final_estimator=clf2)
+    print("Training Stacking Classifier...")
+    sclf.fit(features_train, target_train)
+
+    y_pred = sclf.predict(features_test)
+    print(accuracy_score(y_pred, target_test))
+    print(confusion_matrix(target_test, y_pred))
+    print(classification_report(target_test, y_pred))
+
+    print("3 Fold Cross Validation:")
+    for clf, label in zip([clf1, clf2, sclf], ["Random Forest", "SVM Classifier", "Stacking Classifier"]): 
+        scores = model_selection.cross_val_score(clf, X, y, cv=3, scoring='accuracy')
+        print("Accuracy: %0.2f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
+
+    return sclf
+
+StackingMethod(vectors, y)
