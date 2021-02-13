@@ -8,8 +8,9 @@ from sklearn.ensemble import StackingClassifier
 # from sklearn.linear_model import LogisticRegression
 from sklearn import model_selection
 from sklearn.naive_bayes import GaussianNB 
+from gensim.models.doc2vec import Doc2Vec, TaggedDocument
 
-def tokenization(tweet):
+def tokenize(tweet):
     tokens=[]
     ponctuation=[".",";","!",",","-","\n"]
     useless_words=["i","you","he","she","we","they","it","is","was","to","for"]
@@ -28,7 +29,6 @@ def tokenization(tweet):
                 continue
             elif word[0]=="@":
                 word=word[1:].lower()
-                dico.add(word)
                 tokens.append(word)
             elif word[0]=="#":
                 word=word[1:]
@@ -36,12 +36,10 @@ def tokenization(tweet):
                 for i,letter in enumerate(word):
                     if letter.isupper():
                         if i!=0:
-                            dico.add(word[start_index:i].lower())
                             tokens.append(word[start_index:i].lower())
                         start_index=i
                             
                     elif i==len(word)-1:
-                        dico.add(word[start_index:].lower())
                         tokens.append(word[start_index:].lower())
                     else:
                         continue
@@ -49,7 +47,6 @@ def tokenization(tweet):
                 tokens.append(word.lower())
     return tokens
 
-dico=set()
 X=[]
 y=[]
 with open("./train.txt","r") as file:
@@ -57,14 +54,14 @@ with open("./train.txt","r") as file:
         metadata,tweet = line[:14],line[14:]
         _,tag,company = metadata.split(",")
         company=company[:-1]
-        tokens=tokenization(tweet)
+        tokens=tokenize(tweet)
         X.append(tokens)
         y.append(tag)
+print("All tweets are loaded, creating the vectors of tweets...")
 
-vectors=[]
-for tweet in X:
-    vector=[1 if word in tweet else 0 for word in dico]
-    vectors.append(vector)
+tagged_data = [TaggedDocument(d, [i]) for i, d in enumerate(X)]
+model = Doc2Vec(tagged_data,vector_size=300,window=3,min_count=1,workers=4,epochs=100)
+vectors=[model.infer_vector(tweet_tokens) for tweet_tokens in X]
 
 X_train, X_test, y_train, y_test = train_test_split(vectors,y,test_size=0.2,random_state=0)
 
