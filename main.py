@@ -93,12 +93,12 @@ def find_best_RF(max):
 
 # find_best_RF(61) -> best_param:40 trees
 
-svc = svm.SVC(kernel='rbf')
-print("Fitting SVC Model...")
-svc.fit(X_train, y_train)
+#svc = svm.SVC(kernel='rbf')
+#print("Fitting SVC Model...")
+#svc.fit(X_train, y_train)
 
-print("SVC model")
-evaluate_model(svc)
+#print("SVC model")
+#evaluate_model(svc)
 
 def StackingMethod(X,y):
     features_train, features_test, target_train, target_test = model_selection.train_test_split(X, y, test_size = 0.2, random_state = 0)
@@ -128,4 +128,4 @@ def StackingMethod(X,y):
 
     return sclf
 
-StackingMethod(vectors, y)
+#StackingMethod(vectors, y)
