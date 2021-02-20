@@ -1,0 +1,5 @@
+Keras==2.4.3
+numpy==1.19.2
+gensim==3.8.0
+pandas==1.2.0
+scikit_learn==0.24.1
