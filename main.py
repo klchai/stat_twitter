@@ -1,4 +1,5 @@
 import pandas as pd
+import numpy as np
 from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
@@ -8,12 +9,24 @@ from sklearn.ensemble import StackingClassifier
 # from sklearn.linear_model import LogisticRegression
 from sklearn import model_selection
 from sklearn.naive_bayes import GaussianNB 
-from gensim.models.doc2vec import Doc2Vec, TaggedDocument
+from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
+import nltk
+nltk.download("stopwords")
+from nltk.corpus import stopwords
+import tensorflow as tf
+from tensorflow.keras.models import Sequential
+from tensorflow.keras import Input
+from tensorflow.keras import layers
+from sklearn.preprocessing import LabelEncoder
+from nltk.stem import WordNetLemmatizer 
+
+all_words = set()
+stop_words = set(stopwords.words('english'))
+lemmatizer = WordNetLemmatizer()
 
 def tokenize(tweet):
     tokens=[]
     ponctuation=[".",";","!",",","-","\n"]
-    useless_words=["i","you","he","she","we","they","it","is","was","to","for"]
     for p in ponctuation:
         tweet=tweet.replace(p," ")
     for word in tweet.split():
@@ -25,26 +38,31 @@ def tokenize(tweet):
                 continue
             elif word.startswith("http://") or word.startswith("https://"):
                 continue
-            elif word.lower() in useless_words:
+            elif word.lower() in stop_words:
                 continue
             elif word[0]=="@":
-                word=word[1:].lower()
-                tokens.append(word)
+                continue
             elif word[0]=="#":
                 word=word[1:]
                 start_index=0
                 for i,letter in enumerate(word):
                     if letter.isupper():
                         if i!=0:
-                            tokens.append(word[start_index:i].lower())
+                            new_word = lemmatizer.lemmatize(word[start_index:i].lower())
+                            all_words.add(new_word)
+                            tokens.append(new_word)
                         start_index=i
                             
                     elif i==len(word)-1:
-                        tokens.append(word[start_index:].lower())
+                        new_word = lemmatizer.lemmatize(word[start_index:].lower())
+                        all_words.add(new_word)
+                        tokens.append(new_word)
                     else:
                         continue
             else:
-                tokens.append(word.lower())
+                new_word = lemmatizer.lemmatize(word.lower())
+                all_words.add(new_word)
+                tokens.append(new_word)
     return tokens
 
 X=[]
@@ -52,77 +70,49 @@ y=[]
 with open("./train.txt","r") as file:
     for line in file:
         metadata,tweet = line[:14],line[14:]
-        _,tag,company = metadata.split(",")
-        company=company[:-1]
-        tokens=tokenize(tweet)
-        X.append(tokens)
-        y.append(tag)
+        _,tag,_ = metadata.split(",")
+        tokens = tokenize(tweet)
+        if tag!="irr":
+            X.append(tokens)
+            y.append(tag)
+
 print("All tweets are loaded, creating the vectors of tweets...")
 
-tagged_data = [TaggedDocument(d, [i]) for i, d in enumerate(X)]
-model = Doc2Vec(tagged_data,vector_size=300,window=3,min_count=1,workers=4,epochs=100)
-vectors=[model.infer_vector(tweet_tokens) for tweet_tokens in X]
+def custom_standardize():
+    tweets = []
+    max_sequence_length = 0
+    for tokens in X:
+        current_tweet_length = len(tokens)
+        if current_tweet_length > max_sequence_length:
+            max_sequence_length = current_tweet_length
+        tweets.append(" ".join(tokens))
+    return tweets,max_sequence_length
 
-X_train, X_test, y_train, y_test = train_test_split(vectors,y,test_size=0.2,random_state=0)
+tweets,max_sequence_length = custom_standardize()
+tweets = np.array(tweets)
+le = LabelEncoder()
+le.fit(y)
+y = le.transform(y)
+X_train, X_test, y_train, y_test = train_test_split(tweets,y,test_size=0.2,random_state=0)
 
-def evaluate_model(model, show_detail=False):
-    y_pred = model.predict(X_test)
-    if show_detail:
-        print(confusion_matrix(y_test, y_pred))
-        print(classification_report(y_test, y_pred))
-    print("Accuracy:", accuracy_score(y_test, y_pred))
-    ev = cross_val_score(model, X_test, y_test, cv=3)
-    print("3 Fold Cross Validation, accuracy:",ev.mean())
+MAX_TOKENS_NUM = len(all_words)
+EMBEDDING_DIMS = 10
 
-rf = RandomForestClassifier(n_estimators=40, random_state=0)
-rf.fit(X_train, y_train)
+vectorize_layer = TextVectorization(
+  max_tokens=MAX_TOKENS_NUM,
+  output_mode='int',
+  output_sequence_length=max_sequence_length
+)
+vectorize_layer.adapt(tweets)
 
-print("Random Forest (40 est)")
-evaluate_model(rf)
+model = Sequential()
+model.add(Input(shape=(1,), dtype=tf.string))
+model.add(vectorize_layer)
+model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
+model.add(layers.Dense(1, activation="relu"))
+model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.fit(X_train,y_train,epochs=50)
 
-def find_best_RF(max):
-    param_test1 = {'n_estimators':range(10,max,10)}
-    gsearch1 = GridSearchCV(
-        estimator = RandomForestClassifier(random_state=0), 
-        param_grid = param_test1, scoring='f1_macro', cv=3)
-    gsearch1.fit(X_train, y_train)
-    print(gsearch1.best_params_, gsearch1.best_score_)
-
-# find_best_RF(61) -> best_param:40 trees
-
-#svc = svm.SVC(kernel='rbf')
-#print("Fitting SVC Model...")
-#svc.fit(X_train, y_train)
-
-#print("SVC model")
-#evaluate_model(svc)
-
-def StackingMethod(X,y):
-    features_train, features_test, target_train, target_test = model_selection.train_test_split(X, y, test_size = 0.2, random_state = 0)
-    
-    clf1 = RandomForestClassifier(n_estimators=40, random_state=0)
-    clf2 = svm.SVC(kernel='rbf')
-    # clf3 = GaussianNB()
-
-    estim_models = [
-        ('Random Forest', clf1),
-        ('SVM', clf2),
-    ]
-
-    sclf = StackingClassifier(estimators=estim_models, final_estimator=clf2)
-    print("Training Stacking Classifier...")
-    sclf.fit(features_train, target_train)
-
-    y_pred = sclf.predict(features_test)
-    print(accuracy_score(y_pred, target_test))
-    print(confusion_matrix(target_test, y_pred))
-    print(classification_report(target_test, y_pred))
-
-    print("3 Fold Cross Validation:")
-    for clf, label in zip([clf1, clf2, sclf], ["Random Forest", "SVM Classifier", "Stacking Classifier"]): 
-        scores = model_selection.cross_val_score(clf, X, y, cv=3, scoring='accuracy')
-        print("Accuracy: %0.2f (+/- %0.2f) [%s]" % (scores.mean(), scores.std(), label))
-
-    return sclf
-
-#StackingMethod(vectors, y)
+score = model.evaluate(X_test,y_test)
+print('Test loss:', score[0]) 
+print('Test accuracy:', score[1])
