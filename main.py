@@ -4,10 +4,15 @@ import numpy as np
 import nltk
 nltk.download("stopwords")
 from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
+from nltk.stem import WordNetLemmatizer 
 
-from sklearn.model_selection import train_test_split
+from sklearn import svm
+from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 import tensorflow as tf
 from tensorflow.keras.models import Sequential
@@ -18,9 +23,9 @@ all_words = set()
 stop_words = set(stopwords.words('english'))
 lemmatizer = WordNetLemmatizer()
 
-def tokenize(tweet):
+def tokenize(tweet,tag=None):
     tokens=[]
-    ponctuation=[".",";","!",",","-","\n"]
+    ponctuation=[".",";","!",",","-","'",'"',"\n"]
     for p in ponctuation:
         tweet=tweet.replace(p," ")
     for word in tweet.split():
@@ -43,51 +48,83 @@ def tokenize(tweet):
                     if letter.isupper():
                         if i!=0:
                             new_word = lemmatizer.lemmatize(word[start_index:i].lower())
-                            all_words.add(new_word)
                             tokens.append(new_word)
+                            if tag is not None and tag != "irr":
+                                all_words.add(new_word)
                         start_index=i
                             
                     elif i==len(word)-1:
                         new_word = lemmatizer.lemmatize(word[start_index:].lower())
-                        all_words.add(new_word)
                         tokens.append(new_word)
+                        if tag is not None and tag != "irr":
+                            all_words.add(new_word)
                     else:
                         continue
             else:
                 new_word = lemmatizer.lemmatize(word.lower())
-                all_words.add(new_word)
                 tokens.append(new_word)
+                if tag is not None and tag != "irr":
+                    all_words.add(new_word)
     return tokens
 
-X=[]
-y=[]
+X_svm = []
+y_svm = []
+X_nn = []
+y_nn = []
 with open("./train.txt","r") as file:
     for line in file:
         metadata,tweet = line[:14],line[14:]
         _,tag,_ = metadata.split(",")
-        tokens = tokenize(tweet)
-        if tag!="irr":
-            X.append(tokens)
-            y.append(tag)
+        tokens = tokenize(tweet,tag)
+        X_svm.append(tokens)
+        if tag != "irr":
+            y_svm.append("rel")
+            X_nn.append(tokens)
+            y_nn.append(tag)
+        else:
+            y_svm.append(tag)
 
-print("All tweets are loaded, creating the vectors of tweets...")
+print("All tweets are loaded.")
 
-def custom_standardize():
-    tweets = []
-    max_sequence_length = 0
-    for tokens in X:
-        current_tweet_length = len(tokens)
-        if current_tweet_length > max_sequence_length:
-            max_sequence_length = current_tweet_length
-        tweets.append(" ".join(tokens))
-    return tweets,max_sequence_length
-
-tweets,max_sequence_length = custom_standardize()
-tweets = np.array(tweets)
+# SVM
+"""
 le = LabelEncoder()
 le.fit(y)
 y = le.transform(y)
-X_train, X_test, y_train, y_test = train_test_split(tweets,y,test_size=0.2,random_state=0)
+"""
+tweets_svm = [" ".join(tokens) for tokens in X_svm]
+vectorizer = CountVectorizer(min_df=5)
+print("Creating Vectors of tweets...")
+features = vectorizer.fit_transform(tweets_svm).toarray()
+print("Vectors shape:",features.shape)
+
+X_train_svm, X_test_svm, y_train_svm, y_test_svm = train_test_split(features, y_svm, test_size=0.2, random_state=0)
+svc = svm.SVC(kernel='rbf')
+print("Fitting SVM Classifier...")
+svc.fit(X_train_svm, y_train_svm)
+y_pred = svc.predict(X_test_svm)
+print(classification_report(y_test_svm, y_pred))
+
+
+# Neural network
+tweets_nn = np.array([" ".join(tokens) for tokens in X_nn])
+X_nn = np.array([" ".join(tokens) for tokens in X_nn])
+index_pos, index_neg, index_neu = None, None, None 
+i = 0
+while (index_pos is None) or (index_neg is None) or (index_neu is None):
+    if y_nn[i] == "pos" and index_pos is None:
+        index_pos = i
+    elif y_nn[i] == "neg" and index_neg is None:
+        index_neg = i
+    elif y_nn[i] == "neu" and index_neu is None:
+        index_neu = i
+    i += 1
+
+le = LabelEncoder()
+le.fit(y_nn)
+y_nn = le.transform(y_nn)
+X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
+max_sequence_length = max([len(tokens) for tokens in X_nn])
 
 MAX_TOKENS_NUM = len(all_words)
 EMBEDDING_DIMS = 10
@@ -97,16 +134,33 @@ vectorize_layer = TextVectorization(
   output_mode='int',
   output_sequence_length=max_sequence_length
 )
-vectorize_layer.adapt(tweets)
+vectorize_layer.adapt(tweets_nn)
 
 model = Sequential()
 model.add(Input(shape=(1,), dtype=tf.string))
 model.add(vectorize_layer)
 model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
-model.add(layers.Dense(1, activation="relu"))
+model.add(layers.Dense(1, activation="softmax"))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.fit(X_train,y_train,epochs=50)
+print("Fitting Neural network...")
+model.fit(X_train_nn, y_train_nn, epochs=5)
 
-score = model.evaluate(X_test,y_test)
-print('Test loss:', score[0]) 
-print('Test accuracy:', score[1])
+score = model.evaluate(X_test_nn, y_test_nn)
+print("Test loss NN : ", score[0]) 
+print("Test accuracy NN : ", score[1])
+
+def main():
+    tweet = input("Type a tweet : \n")
+    tweet_vector = vectorizer.transform([tweet]).toarray()
+    prediction = svc.predict(tweet_vector)
+    print("Prediction : ",prediction[0])
+    if prediction[0] == "irr":
+        print("this tweet is irrelevant")
+    else:
+        tweet_to_predict = [" ".join(tokenize(tweet))]
+        tweet_to_predict = np.array(tweet_to_predict)
+        prediction = np.argmax(model.predict(tweet_to_predict), axis=-1)
+        print("Prediction : ",prediction)
+
+if __name__ == "__main__":
+    main()
