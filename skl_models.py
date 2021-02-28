@@ -4,14 +4,16 @@ import numpy as np
 import nltk
 nltk.download("stopwords")
 from nltk.corpus import stopwords
-from nltk.stem import WordNetLemmatizer
+from nltk.stem import WordNetLemmatizer 
 
-from sklearn.model_selection import train_test_split
+from sklearn import svm
+from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import LabelEncoder
+from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.ensemble import RandomForestClassifier, StackingClassifier
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
-import tensorflow as tf
-from tensorflow.keras.models import Sequential
-from tensorflow.keras import Input, layers
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
 
 all_words = set()
@@ -66,11 +68,18 @@ with open("./train.txt","r") as file:
         metadata,tweet = line[:14],line[14:]
         _,tag,_ = metadata.split(",")
         tokens = tokenize(tweet)
+        X.append(tokens)
+        y.append(tag)
+        """
         if tag!="irr":
             X.append(tokens)
+            y.append("nrr")
+        else:
+            X.append(tokens)
             y.append(tag)
+        """
 
-print("All tweets are loaded, creating the vectors of tweets...")
+print("All tweets are loaded.")
 
 def custom_standardize():
     tweets = []
@@ -86,27 +95,38 @@ tweets,max_sequence_length = custom_standardize()
 tweets = np.array(tweets)
 le = LabelEncoder()
 le.fit(y)
-y = le.transform(y)
-X_train, X_test, y_train, y_test = train_test_split(tweets,y,test_size=0.2,random_state=0)
+#y = le.transform(y)
+#print("Labels:", y)
 
-MAX_TOKENS_NUM = len(all_words)
-EMBEDDING_DIMS = 10
+# Vectorizer 
+vectorizer = CountVectorizer(min_df=5)
+print("Creating Vectors of tweets...")
+features = vectorizer.fit_transform(tweets).toarray()
+print("Vectors shape:",features.shape)
 
-vectorize_layer = TextVectorization(
-  max_tokens=MAX_TOKENS_NUM,
-  output_mode='int',
-  output_sequence_length=max_sequence_length
-)
-vectorize_layer.adapt(tweets)
+X_train, X_test, y_train, y_test = train_test_split(features, y, test_size=0.2, random_state=0)
+print("X_train:{}, y_train:{}".format(X_train[0], y_train[0]))
 
-model = Sequential()
-model.add(Input(shape=(1,), dtype=tf.string))
-model.add(vectorize_layer)
-model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
-model.add(layers.Dense(1, activation="relu"))
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-model.fit(X_train,y_train,epochs=50)
+def evaluate_model(model, show_detail=False):
+    y_pred = model.predict(X_test)
+    if show_detail:
+        print(confusion_matrix(y_test, y_pred))
+        print(classification_report(y_test, y_pred))
+    print("Accuracy:", accuracy_score(y_test, y_pred))
+    ev = cross_val_score(model, X_test, y_test, cv=3)
+    print("3 Fold Cross Validation, accuracy:",ev.mean())
 
-score = model.evaluate(X_test,y_test)
-print('Test loss:', score[0]) 
-print('Test accuracy:', score[1])
+rf = RandomForestClassifier(n_estimators=40, random_state=0)
+rf.fit(X_train, y_train)
+print("Fitting RandomForest Classifier (40 est)...")
+evaluate_model(rf, show_detail=True)
+
+svc = svm.SVC(kernel='rbf')
+print("Fitting SVM Classifier...")
+svc.fit(X_train, y_train)
+evaluate_model(svc, show_detail=True)
+
+bayes = GaussianNB()
+print("Fitting Gaussian NB...")
+bayes.fit(X_train, y_train)
+evaluate_model(bayes, show_detail=True)
