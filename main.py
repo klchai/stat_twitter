@@ -9,7 +9,7 @@ from nltk.stem import WordNetLemmatizer
 from sklearn import svm
 from sklearn.naive_bayes import GaussianNB
 from sklearn.preprocessing import LabelEncoder
-from sklearn.feature_extraction.text import CountVectorizer
+from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier, StackingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
@@ -85,26 +85,30 @@ with open("./train.txt","r") as file:
             y_svm.append(tag)
 
 print("All tweets are loaded.")
-
 # SVM
-"""
-le = LabelEncoder()
-le.fit(y)
-y = le.transform(y)
-"""
 tweets_svm = [" ".join(tokens) for tokens in X_svm]
-vectorizer = CountVectorizer(min_df=5)
+count_vect = CountVectorizer(min_df=1, ngram_range=(1, 2), stop_words='english')
+tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
+
 print("Creating Vectors of tweets...")
-features = vectorizer.fit_transform(tweets_svm).toarray()
+#features = count_vect.fit_transform(tweets_svm)
+features = tfidf.fit_transform(tweets_svm)
 print("Vectors shape:",features.shape)
 
 X_train_svm, X_test_svm, y_train_svm, y_test_svm = train_test_split(features, y_svm, test_size=0.2, random_state=0)
+
 svc = svm.SVC(kernel='rbf')
 print("Fitting SVM Classifier...")
 svc.fit(X_train_svm, y_train_svm)
 y_pred = svc.predict(X_test_svm)
 print(classification_report(y_test_svm, y_pred))
 
+"""BACKUP MODEL IF SVC NOT ENGOUGH
+from sklearn.naive_bayes import MultinomialNB
+clf = MultinomialNB().fit(X_train_svm, y_train_svm)
+clf_pred = clf.predict(X_test_svm)
+print(classification_report(y_test_svm, y_pred))
+"""
 
 # Neural network
 tweets_nn = np.array([" ".join(tokens) for tokens in X_nn])
@@ -151,16 +155,16 @@ print("Test accuracy NN : ", score[1])
 
 def main():
     tweet = input("Type a tweet : \n")
-    tweet_vector = vectorizer.transform([tweet]).toarray()
+    tweet_vector = tfidf.transform([tweet]).toarray()
     prediction = svc.predict(tweet_vector)
-    print("Prediction : ",prediction[0])
+    print("Prediction (SVM) : ",prediction[0])
     if prediction[0] == "irr":
         print("this tweet is irrelevant")
     else:
         tweet_to_predict = [" ".join(tokenize(tweet))]
         tweet_to_predict = np.array(tweet_to_predict)
         prediction = np.argmax(model.predict(tweet_to_predict), axis=-1)
-        print("Prediction : ",prediction)
+        print("Prediction (NN) : \n",prediction)
 
 if __name__ == "__main__":
     main()
