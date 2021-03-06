@@ -7,10 +7,11 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer 
 
 from sklearn import svm
-from sklearn.naive_bayes import GaussianNB
+from sklearn.naive_bayes import MultinomialNB
 from sklearn.preprocessing import LabelEncoder
+from sklearn.linear_model import LogisticRegression
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
-from sklearn.ensemble import RandomForestClassifier, StackingClassifier
+from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
@@ -87,7 +88,7 @@ with open("./train.txt","r") as file:
 print("All tweets are loaded.")
 # SVM
 tweets_svm = [" ".join(tokens) for tokens in X_svm]
-count_vect = CountVectorizer(min_df=1, ngram_range=(1, 2), stop_words='english')
+# count_vect = CountVectorizer(min_df=1, ngram_range=(1, 2), stop_words='english')
 tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
 
 print("Creating Vectors of tweets...")
@@ -102,13 +103,6 @@ print("Fitting SVM Classifier...")
 svc.fit(X_train_svm, y_train_svm)
 y_pred = svc.predict(X_test_svm)
 print(classification_report(y_test_svm, y_pred))
-
-"""BACKUP MODEL IF SVC NOT ENGOUGH
-from sklearn.naive_bayes import MultinomialNB
-clf = MultinomialNB().fit(X_train_svm, y_train_svm)
-clf_pred = clf.predict(X_test_svm)
-print(classification_report(y_test_svm, y_pred))
-"""
 
 # Neural network
 tweets_nn = np.array([" ".join(tokens) for tokens in X_nn])
@@ -127,6 +121,8 @@ while (index_pos is None) or (index_neg is None) or (index_neu is None):
 le = LabelEncoder()
 le.fit(y_nn)
 y_nn = le.transform(y_nn)
+encod_res = {0:'neg', 1:'neu', 2:'pos'}
+
 X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
 max_sequence_length = max([len(tokens) for tokens in X_nn])
 
@@ -146,16 +142,30 @@ model.add(vectorize_layer)
 model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
 model.add(layers.Dense(1, activation="softmax"))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
-print("Fitting Neural network...")
+print("Fitting Neural Network...")
 model.fit(X_train_nn, y_train_nn, epochs=5)
 
 score = model.evaluate(X_test_nn, y_test_nn)
 print("Test loss NN : ", score[0]) 
 print("Test accuracy NN : ", score[1])
 
+# Voting Classifier
+X_train_vote = tfidf.transform(X_train_nn)
+X_test_vote = tfidf.transform(X_test_nn)
+
+clf1 = LogisticRegression(multi_class='multinomial', random_state=1)
+clf2 = RandomForestClassifier(n_estimators=40, random_state=1)
+clf3 = MultinomialNB()
+vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('Bayes',clf3)], voting='soft')
+
+print("Fitting Voting Classifier...")
+vote_soft.fit(X_train_vote, y_train_nn)
+vote_pred_y = vote_soft.predict(X_test_vote)
+print(classification_report(y_test_nn, vote_pred_y))
+
 def main():
     tweet = input("Type a tweet : \n")
-    tweet_vector = tfidf.transform([tweet]).toarray()
+    tweet_vector = tfidf.transform([tweet])
     prediction = svc.predict(tweet_vector)
     print("Prediction (SVM) : ",prediction[0])
     if prediction[0] == "irr":
@@ -164,7 +174,9 @@ def main():
         tweet_to_predict = [" ".join(tokenize(tweet))]
         tweet_to_predict = np.array(tweet_to_predict)
         prediction = np.argmax(model.predict(tweet_to_predict), axis=-1)
-        print("Prediction (NN) : \n",prediction)
+        print("Prediction (NN) : \n", prediction)
+        pred_vote_soft = vote_soft.predict(tweet_vector)
+        print("Prediction (Voting) : ", encod_res[pred_vote_soft[0]] )
 
 if __name__ == "__main__":
     main()
