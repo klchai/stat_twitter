@@ -10,6 +10,7 @@ from sklearn import svm
 from sklearn.naive_bayes import MultinomialNB
 from sklearn.preprocessing import LabelEncoder
 from sklearn.linear_model import LogisticRegression
+from sklearn.utils.class_weight import compute_class_weight
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
@@ -118,16 +119,15 @@ while (index_pos is None) or (index_neg is None) or (index_neu is None):
         index_neu = i
     i += 1
 
-print("Before: ",y_nn[0:10])
 le = LabelEncoder()
 le.fit(y_nn)
 y_nn = le.transform(y_nn)
 encod_res = {0:'neg', 1:'neu', 2:'pos'}
-print("After: ",y_nn[0:10])
+weight = compute_class_weight(class_weight='balanced', classes=[0,1,2], y=y_nn)
+print("Class weight for neg/neu/pos:", weight)
 
 X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
 max_sequence_length = max([len(tokens) for tokens in X_nn])
-
 MAX_TOKENS_NUM = len(all_words)
 EMBEDDING_DIMS = 10
 
@@ -145,7 +145,7 @@ model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
 model.add(layers.Dense(1, activation="softmax"))
 model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
 print("Fitting Neural Network...")
-model.fit(X_train_nn, y_train_nn, epochs=5)
+model.fit(X_train_nn, y_train_nn, epochs=5, class_weight=dict(enumerate(weight)))
 
 score = model.evaluate(X_test_nn, y_test_nn)
 print("Test loss NN : ", score[0]) 
