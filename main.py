@@ -98,7 +98,7 @@ print("Vectors shape:",features.shape)
 
 X_train_svm, X_test_svm, y_train_svm, y_test_svm = train_test_split(features, y_svm, test_size=0.2, random_state=0)
 
-svc = svm.SVC(kernel='rbf')
+svc = svm.SVC(kernel='rbf', class_weight='balanced')
 print("Fitting SVM Classifier...")
 svc.fit(X_train_svm, y_train_svm)
 y_pred = svc.predict(X_test_svm)
@@ -118,10 +118,12 @@ while (index_pos is None) or (index_neg is None) or (index_neu is None):
         index_neu = i
     i += 1
 
+print("Before: ",y_nn[0:10])
 le = LabelEncoder()
 le.fit(y_nn)
 y_nn = le.transform(y_nn)
 encod_res = {0:'neg', 1:'neu', 2:'pos'}
+print("After: ",y_nn[0:10])
 
 X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
 max_sequence_length = max([len(tokens) for tokens in X_nn])
@@ -150,11 +152,13 @@ print("Test loss NN : ", score[0])
 print("Test accuracy NN : ", score[1])
 
 # Voting Classifier
-X_train_vote = tfidf.transform(X_train_nn)
-X_test_vote = tfidf.transform(X_test_nn)
+vote_tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
+vote_tfidf.fit_transform(X_nn)
+X_train_vote = vote_tfidf.transform(X_train_nn)
+X_test_vote = vote_tfidf.transform(X_test_nn)
 
-clf1 = LogisticRegression(multi_class='multinomial', random_state=1)
-clf2 = RandomForestClassifier(n_estimators=40, random_state=1)
+clf1 = LogisticRegression(multi_class='multinomial', random_state=1, class_weight='balanced')
+clf2 = RandomForestClassifier(n_estimators=40, random_state=1, class_weight='balanced')
 clf3 = MultinomialNB()
 vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('Bayes',clf3)], voting='soft')
 
@@ -175,8 +179,9 @@ def main():
         tweet_to_predict = np.array(tweet_to_predict)
         prediction = np.argmax(model.predict(tweet_to_predict), axis=-1)
         print("Prediction (NN) : \n", prediction)
-        pred_vote_soft = vote_soft.predict(tweet_vector)
-        print("Prediction (Voting) : ", encod_res[pred_vote_soft[0]] )
+        vect_tweet_to_predict = vote_tfidf.transform(tweet_to_predict)
+        pred_vote_soft = vote_soft.predict(vect_tweet_to_predict)
+        print("Prediction (Voting) : ", encod_res[pred_vote_soft[0]])
 
 if __name__ == "__main__":
     main()
