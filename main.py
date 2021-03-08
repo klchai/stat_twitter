@@ -17,6 +17,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, GridSearc
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 import tensorflow as tf
+from tensorflow.keras.utils import np_utils
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import Input, layers
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
@@ -118,18 +119,27 @@ while (index_pos is None) or (index_neg is None) or (index_neu is None):
     elif y_nn[i] == "neu" and index_neu is None:
         index_neu = i
     i += 1
-
+# coder les valeurs de classe en int
 le = LabelEncoder()
 le.fit(y_nn)
 y_nn = le.transform(y_nn)
+
+# convertir des entiers en OneHot Encode
+dummy_y = np_utils.to_categorical(y_nn)
+
+# convertir des entiers en classe
 encod_res = {0:'neg', 1:'neu', 2:'pos'}
+
+# calculer les poids entre les différentes classes 
 weight = compute_class_weight(class_weight='balanced', classes=[0,1,2], y=y_nn)
 print("Class weight for neg/neu/pos:", weight)
 
-X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
+X_train_vote, X_test_vote, y_train_vote, y_test_vote = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
+X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, dummy_y, test_size=0.2, random_state=0)
+
 max_sequence_length = max([len(tokens) for tokens in X_nn])
 MAX_TOKENS_NUM = len(all_words)
-EMBEDDING_DIMS = 10
+EMBEDDING_DIMS = 120
 
 vectorize_layer = TextVectorization(
   max_tokens=MAX_TOKENS_NUM,
@@ -142,20 +152,25 @@ model = Sequential()
 model.add(Input(shape=(1,), dtype=tf.string))
 model.add(vectorize_layer)
 model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
-model.add(layers.Dense(1, activation="softmax"))
-model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+#model.add(layers.Conv1D(128,3, activation='relu'))
+model.add(layers.Flatten())
+model.add(layers.Dense(3, activation='softmax'))
+
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+
 print("Fitting Neural Network...")
 model.fit(X_train_nn, y_train_nn, epochs=5, class_weight=dict(enumerate(weight)))
 
-score = model.evaluate(X_test_nn, y_test_nn)
-print("Test loss NN : ", score[0]) 
-print("Test accuracy NN : ", score[1])
+loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
+print("Training Accuracy: {:.4f}".format(accuracy))
+loss, accuracy = model.evaluate(X_test_nn, y_test_nn, verbose=False)
+print("Testing Accuracy:  {:.4f}".format(accuracy))
 
 # Voting Classifier
 vote_tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
 vote_tfidf.fit_transform(X_nn)
-X_train_vote = vote_tfidf.transform(X_train_nn)
-X_test_vote = vote_tfidf.transform(X_test_nn)
+X_train_vote = vote_tfidf.transform(X_train_vote)
+X_test_vote = vote_tfidf.transform(X_test_vote)
 
 clf1 = LogisticRegression(multi_class='multinomial', random_state=1, class_weight='balanced')
 clf2 = RandomForestClassifier(n_estimators=40, random_state=1, class_weight='balanced')
@@ -163,9 +178,9 @@ clf3 = MultinomialNB()
 vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('Bayes',clf3)], voting='soft')
 
 print("Fitting Voting Classifier...")
-vote_soft.fit(X_train_vote, y_train_nn)
+vote_soft.fit(X_train_vote, y_train_vote)
 vote_pred_y = vote_soft.predict(X_test_vote)
-print(classification_report(y_test_nn, vote_pred_y))
+print(classification_report(y_test_vote, vote_pred_y))
 
 def main():
     tweet = input("Type a tweet : \n")
@@ -177,8 +192,8 @@ def main():
     else:
         tweet_to_predict = [" ".join(tokenize(tweet))]
         tweet_to_predict = np.array(tweet_to_predict)
-        prediction = np.argmax(model.predict(tweet_to_predict), axis=-1)
-        print("Prediction (NN) : \n", prediction)
+        prediction = np.argmax(model.predict(tweet_to_predict), axis=1)
+        print("Prediction (NN) : ", encod_res[prediction[0]])
         vect_tweet_to_predict = vote_tfidf.transform(tweet_to_predict)
         pred_vote_soft = vote_soft.predict(vect_tweet_to_predict)
         print("Prediction (Voting) : ", encod_res[pred_vote_soft[0]])
