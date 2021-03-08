@@ -17,7 +17,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, GridSearc
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 import tensorflow as tf
-from tensorflow.keras.utils import np_utils
+from keras.utils import np_utils
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import Input, layers
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
