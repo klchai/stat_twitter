@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from numpy import dstack
 
 import nltk
 nltk.download("stopwords")
@@ -7,8 +8,8 @@ from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer 
 
 from sklearn import svm
-from sklearn.naive_bayes import MultinomialNB
 from sklearn.preprocessing import LabelEncoder
+from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
@@ -18,6 +19,7 @@ from sklearn.metrics import classification_report, confusion_matrix, accuracy_sc
 
 import tensorflow as tf
 from keras.utils import np_utils
+from keras.models import load_model
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import Input, layers
 from tensorflow.keras.layers.experimental.preprocessing import TextVectorization
@@ -152,19 +154,19 @@ model = Sequential()
 model.add(Input(shape=(1,), dtype=tf.string))
 model.add(vectorize_layer)
 model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
-#model.add(layers.Conv1D(128,3, activation='relu'))
+# model.add(layers.Conv1D(128,3, activation='relu'))
 model.add(layers.Flatten())
 model.add(layers.Dense(3, activation='softmax'))
 
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
 
 print("Fitting Neural Network...")
-model.fit(X_train_nn, y_train_nn, epochs=5, class_weight=dict(enumerate(weight)))
+model.fit(X_train_nn, y_train_nn, epochs=10, class_weight=dict(enumerate(weight)))
 
 loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
-print("Training Accuracy: {:.4f}".format(accuracy))
+print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
 loss, accuracy = model.evaluate(X_test_nn, y_test_nn, verbose=False)
-print("Testing Accuracy:  {:.4f}".format(accuracy))
+print("Testing Accuracy:  {:.4f} Loss: {:.4f}".format(accuracy, loss))
 
 # Voting Classifier
 vote_tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
@@ -174,13 +176,29 @@ X_test_vote = vote_tfidf.transform(X_test_vote)
 
 clf1 = LogisticRegression(multi_class='multinomial', random_state=1, class_weight='balanced')
 clf2 = RandomForestClassifier(n_estimators=40, random_state=1, class_weight='balanced')
-clf3 = MultinomialNB()
-vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('Bayes',clf3)], voting='soft')
+clf3 = KNeighborsClassifier(n_neighbors=5)
+
+"""
+def build_nn():
+    model = Sequential()
+    model.add(layers.Dense(50, activation='relu', input_shape=[3]))
+    model.add(layers.Dense(1, activation='sigmoid'))
+    model.compile(optimizer='Adam', loss='binary_crossentropy', metrics=['accuracy'])
+    return model
+keras_clf = tf.keras.wrappers.scikit_learn.KerasClassifier(build_nn, epochs=5, verbose=False)
+keras_clf._estimator_type = "classifier"
+"""
+
+vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('KNN',clf3)], voting='soft')
 
 print("Fitting Voting Classifier...")
 vote_soft.fit(X_train_vote, y_train_vote)
 vote_pred_y = vote_soft.predict(X_test_vote)
 print(classification_report(y_test_vote, vote_pred_y))
+
+for clf, label in zip([clf1, clf2, clf3, vote_soft], ['Logistic Regression', 'Random Forest', 'KNN', 'Ensemble']):
+    scores = cross_val_score(clf, X_test_vote, y_test_vote, cv=5, scoring='accuracy')
+    print("Accuracy: %0.3f (+/- %0.3f) [%s]" % (scores.mean(), scores.std(), label))
 
 def main():
     tweet = input("Type a tweet : \n")
