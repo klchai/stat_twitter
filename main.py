@@ -154,11 +154,10 @@ model = Sequential()
 model.add(Input(shape=(1,), dtype=tf.string))
 model.add(vectorize_layer)
 model.add(layers.Embedding(MAX_TOKENS_NUM,EMBEDDING_DIMS))
-# model.add(layers.Conv1D(128,3, activation='relu'))
 model.add(layers.Flatten())
 model.add(layers.Dense(3, activation='softmax'))
 
-model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['accuracy'])
+model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
 
 print("Fitting Neural Network...")
 model.fit(X_train_nn, y_train_nn, epochs=10, class_weight=dict(enumerate(weight)))
@@ -177,18 +176,6 @@ X_test_vote = vote_tfidf.transform(X_test_vote)
 clf1 = LogisticRegression(multi_class='multinomial', random_state=1, class_weight='balanced')
 clf2 = RandomForestClassifier(n_estimators=40, random_state=1, class_weight='balanced')
 clf3 = KNeighborsClassifier(n_neighbors=5)
-
-"""
-def build_nn():
-    model = Sequential()
-    model.add(layers.Dense(50, activation='relu', input_shape=[3]))
-    model.add(layers.Dense(1, activation='sigmoid'))
-    model.compile(optimizer='Adam', loss='binary_crossentropy', metrics=['accuracy'])
-    return model
-keras_clf = tf.keras.wrappers.scikit_learn.KerasClassifier(build_nn, epochs=5, verbose=False)
-keras_clf._estimator_type = "classifier"
-"""
-
 vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('KNN',clf3)], voting='soft')
 
 print("Fitting Voting Classifier...")
