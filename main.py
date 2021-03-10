@@ -18,7 +18,7 @@ from sklearn.model_selection import train_test_split, cross_val_score, GridSearc
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 import tensorflow as tf
-from keras.utils import np_utils
+from keras.utils import np_utils, plot_model
 from keras.models import load_model
 from tensorflow.keras.models import Sequential
 from tensorflow.keras import Input, layers
@@ -134,9 +134,8 @@ encod_res = {0:'neg', 1:'neu', 2:'pos'}
 
 # calculer les poids entre les différentes classes 
 weight = compute_class_weight(class_weight='balanced', classes=[0,1,2], y=y_nn)
-print("Class weight for neg/neu/pos:", weight)
+print("Class weight:", weight)
 
-X_train_vote, X_test_vote, y_train_vote, y_test_vote = train_test_split(X_nn, y_nn, test_size=0.2, random_state=0)
 X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, dummy_y, test_size=0.2, random_state=0)
 
 max_sequence_length = max([len(tokens) for tokens in X_nn])
@@ -167,25 +166,7 @@ print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
 loss, accuracy = model.evaluate(X_test_nn, y_test_nn, verbose=False)
 print("Testing Accuracy:  {:.4f} Loss: {:.4f}".format(accuracy, loss))
 
-# Voting Classifier
-vote_tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
-vote_tfidf.fit_transform(X_nn)
-X_train_vote = vote_tfidf.transform(X_train_vote)
-X_test_vote = vote_tfidf.transform(X_test_vote)
-
-clf1 = LogisticRegression(multi_class='multinomial', random_state=1, class_weight='balanced')
-clf2 = RandomForestClassifier(n_estimators=40, random_state=1, class_weight='balanced')
-clf3 = KNeighborsClassifier(n_neighbors=5)
-vote_soft = VotingClassifier(estimators=[('LR', clf1),('RF',clf2),('KNN',clf3)], voting='soft')
-
-print("Fitting Voting Classifier...")
-vote_soft.fit(X_train_vote, y_train_vote)
-vote_pred_y = vote_soft.predict(X_test_vote)
-print(classification_report(y_test_vote, vote_pred_y))
-
-for clf, label in zip([clf1, clf2, clf3, vote_soft], ['Logistic Regression', 'Random Forest', 'KNN', 'Ensemble']):
-    scores = cross_val_score(clf, X_test_vote, y_test_vote, cv=5, scoring='accuracy')
-    print("Accuracy: %0.3f (+/- %0.3f) [%s]" % (scores.mean(), scores.std(), label))
+plot_model(model, to_file='model.png')
 
 def main():
     tweet = input("Type a tweet : \n")
@@ -199,9 +180,6 @@ def main():
         tweet_to_predict = np.array(tweet_to_predict)
         prediction = np.argmax(model.predict(tweet_to_predict), axis=1)
         print("Prediction (NN) : ", encod_res[prediction[0]])
-        vect_tweet_to_predict = vote_tfidf.transform(tweet_to_predict)
-        pred_vote_soft = vote_soft.predict(vect_tweet_to_predict)
-        print("Prediction (Voting) : ", encod_res[pred_vote_soft[0]])
 
 if __name__ == "__main__":
     main()
