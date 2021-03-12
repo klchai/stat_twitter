@@ -12,7 +12,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.feature_extraction.text import CountVectorizer, TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
@@ -92,11 +92,9 @@ with open("./train.txt","r") as file:
 print("All tweets are loaded.")
 # SVM
 tweets_svm = [" ".join(tokens) for tokens in X_svm]
-# count_vect = CountVectorizer(min_df=1, ngram_range=(1, 2), stop_words='english')
-tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
+tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 3), stop_words='english')
 
 print("Creating Vectors of tweets...")
-#features = count_vect.fit_transform(tweets_svm)
 features = tfidf.fit_transform(tweets_svm)
 print("Vectors shape:",features.shape)
 
@@ -168,6 +166,47 @@ print("Testing Accuracy:  {:.4f} Loss: {:.4f}".format(accuracy, loss))
 
 plot_model(model, to_file='model.png')
 
+def testset():
+    X_testset = []
+    ids_list = []
+    comp_list = []
+    testset_orig = []
+    with open("./test.txt","r") as file:
+        for line in file:
+            metadata,tweet = line[:14],line[14:]
+            testset_orig.append(tweet)
+
+            ids,_,company = metadata.split(",")
+            ids_list.append(ids)
+            comp_list.append(company)
+
+            tokens = tokenize(tweet)
+            X_testset.append(tokens)
+
+    X_testset_to_pred = [" ".join(tokens) for tokens in X_testset]
+    testset_vector = tfidf.transform(X_testset_to_pred)
+    print("Predicting irrelated and related tweets...")
+    pred_svm = svc.predict(testset_vector)
+
+    X_testset_nn = np.array(X_testset_to_pred)
+    print("Predicting tags...")
+    pred_nn = np.argmax(model.predict(X_testset_nn), axis=1)
+    tags_nn = [encod_res[i] for i in pred_nn]
+
+    final_tags = []
+    for i in range(len(X_testset)):
+        if pred_svm[i] == "irr":
+            final_tags.append("irr")
+        else:
+            final_tags.append(tags_nn[i])
+
+    print("First 15 final tags:", final_tags[0:15])
+    print("Starting write the result into file...")
+    fw = open("output.txt", "w")
+    for i in range(len(X_testset)):
+        fw.write(str(ids_list[i])+","+str(final_tags[i])+","+str(comp_list[i])+str(testset_orig[i]))
+    print("Done!")
+
 def main():
     tweet = input("Type a tweet : \n")
     tweet_vector = tfidf.transform([tweet])
@@ -182,4 +221,5 @@ def main():
         print("Prediction (NN) : ", encod_res[prediction[0]])
 
 if __name__ == "__main__":
-    main()
+    #main()
+    testset()
