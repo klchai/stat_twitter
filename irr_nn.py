@@ -87,24 +87,39 @@ with open("./train.txt","r") as file:
             X_nn.append(tokens)
             y_nn.append(tag)
         else:
-            y_svm.append(tag)
+            y_svm.append("irr")
 
 print("All tweets are loaded.")
-# SVM
+
 tweets_svm = [" ".join(tokens) for tokens in X_svm]
-tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
+#tfidf = TfidfVectorizer(min_df=1, ngram_range=(1, 2), stop_words='english')
+from sklearn.feature_extraction.text import CountVectorizer
+vectorizer = CountVectorizer(min_df=0)
 
 print("Creating Vectors of tweets...")
-features = tfidf.fit_transform(tweets_svm)
+vectorizer.fit_transform(tweets_svm)
+features = vectorizer.transform(tweets_svm).toarray()
 print("Vectors shape:",features.shape)
+
+lb = LabelEncoder()
+lb.fit(y_svm)
+y_svm = lb.transform(y_svm)
+print("y_svm:",y_svm[0:10])
+encod_irr = {0:'irr', 1:'rel'}
 
 X_train_svm, X_test_svm, y_train_svm, y_test_svm = train_test_split(features, y_svm, test_size=0.2, random_state=0)
 
-svc = svm.SVC(kernel='rbf', class_weight='balanced')
-print("Fitting SVM Classifier...")
-svc.fit(X_train_svm, y_train_svm)
-y_pred = svc.predict(X_test_svm)
-print(classification_report(y_test_svm, y_pred))
+mod_irr = Sequential()
+mod_irr.add(layers.Dense(10, activation='relu'))
+mod_irr.add(layers.Dense(1, activation='sigmoid'))
+mod_irr.compile(loss='binary_crossentropy',optimizer='adam',metrics=['binary_accuracy'])
+
+mod_irr.fit(X_train_svm, y_train_svm, epochs=20, validation_data=(X_test_svm, y_test_svm))
+
+loss, accuracy = mod_irr.evaluate(X_train_svm, y_train_svm, verbose=False)
+print("Training Accuracy: {:.4f}".format(accuracy))
+loss, accuracy = mod_irr.evaluate(X_test_svm, y_test_svm, verbose=False)
+print("Testing Accuracy:  {:.4f}".format(accuracy))
 
 # Neural network
 tweets_nn = np.array([" ".join(tokens) for tokens in X_nn])
@@ -184,42 +199,31 @@ def testset():
             X_testset.append(tokens)
 
     X_testset_to_pred = [" ".join(tokens) for tokens in X_testset]
-    testset_vector = tfidf.transform(X_testset_to_pred)
+    testset_vector = vectorizer.transform(X_testset_to_pred)
     print("Predicting irrelated and related tweets...")
-    pred_svm = svc.predict(testset_vector)
+    pred_svm = np.argmax(mod_irr.predict(testset_vector),axis=1)
+    tags_irr = [encod_irr[i] for i in pred_svm]
+    print("Pred of svm:", tags_irr[0:10])
 
     X_testset_nn = np.array(X_testset_to_pred)
     print("Predicting tags...")
     pred_nn = np.argmax(model.predict(X_testset_nn), axis=1)
     tags_nn = [encod_res[i] for i in pred_nn]
+    print("Pred of nn:", tags_nn[0:10])
 
     final_tags = []
     for i in range(len(X_testset)):
-        if pred_svm[i] == "irr":
+        if tags_irr[i] == "irr":
             final_tags.append("irr")
         else:
             final_tags.append(tags_nn[i])
 
     print("First 15 final tags:", final_tags[0:15])
     print("Starting write the result into file...")
-    fw = open("output.txt", "w")
+    fw = open("output_nns.txt", "w")
     for i in range(len(X_testset)):
         fw.write(str(ids_list[i])+","+str(final_tags[i])+","+str(comp_list[i])+str(testset_orig[i]))
     print("Done!")
 
-def main():
-    tweet = input("Type a tweet : \n")
-    tweet_vector = tfidf.transform([tweet])
-    prediction = svc.predict(tweet_vector)
-    print("Prediction (SVM) : ",prediction[0])
-    if prediction[0] == "irr":
-        print("this tweet is irrelevant")
-    else:
-        tweet_to_predict = [" ".join(tokenize(tweet))]
-        tweet_to_predict = np.array(tweet_to_predict)
-        prediction = np.argmax(model.predict(tweet_to_predict), axis=1)
-        print("Prediction (NN) : ", encod_res[prediction[0]])
-
 if __name__ == "__main__":
-    #main()
     testset()
