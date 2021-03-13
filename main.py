@@ -109,16 +109,7 @@ print(classification_report(y_test_svm, y_pred))
 # Neural network
 tweets_nn = np.array([" ".join(tokens) for tokens in X_nn])
 X_nn = np.array([" ".join(tokens) for tokens in X_nn])
-index_pos, index_neg, index_neu = None, None, None 
-i = 0
-while (index_pos is None) or (index_neg is None) or (index_neu is None):
-    if y_nn[i] == "pos" and index_pos is None:
-        index_pos = i
-    elif y_nn[i] == "neg" and index_neg is None:
-        index_neg = i
-    elif y_nn[i] == "neu" and index_neu is None:
-        index_neu = i
-    i += 1
+
 # coder les valeurs de classe en int
 le = LabelEncoder()
 le.fit(y_nn)
@@ -163,8 +154,6 @@ loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
 print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
 loss, accuracy = model.evaluate(X_test_nn, y_test_nn, verbose=False)
 print("Testing Accuracy:  {:.4f} Loss: {:.4f}".format(accuracy, loss))
-
-plot_model(model, to_file='model.png')
 
 def testset():
     X_testset = []
@@ -213,12 +202,12 @@ def main():
     prediction = svc.predict(tweet_vector)
     print("Prediction (SVM) : ",prediction[0])
     if prediction[0] == "irr":
-        print("this tweet is irrelevant")
+        print("This tweet is irrelevant")
     else:
         tweet_to_predict = [" ".join(tokenize(tweet))]
         tweet_to_predict = np.array(tweet_to_predict)
         prediction = np.argmax(model.predict(tweet_to_predict), axis=1)
-        print("Prediction (NN) : ", encod_res[prediction[0]])
+        print(f"This tweet is {encod_res[prediction[0]]})
 
 if __name__ == "__main__":
     #main()
