@@ -7,15 +7,9 @@ nltk.download("stopwords")
 from nltk.corpus import stopwords
 from nltk.stem import WordNetLemmatizer 
 
-from sklearn import svm
 from sklearn.preprocessing import LabelEncoder
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
-from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
+from sklearn.model_selection import train_test_split
 
 import tensorflow as tf
 from keras.utils import np_utils, plot_model
@@ -30,7 +24,7 @@ lemmatizer = WordNetLemmatizer()
 
 def tokenize(tweet,tag=None):
     tokens=[]
-    ponctuation=[".",";","!",",","-","'",'"',"\n"]
+    ponctuation=[".",";","!",",","-","'",'"',"&","\n"]
     for p in ponctuation:
         tweet=tweet.replace(p," ")
     for word in tweet.split():
@@ -138,14 +132,14 @@ model.add(layers.Dense(4, activation='softmax'))
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
 
 print("Fitting Neural Network...")
-model.fit(X_train_nn, y_train_nn, epochs=10, class_weight=dict(enumerate(weight)))
+model.fit(X_train_nn, y_train_nn, epochs=12, class_weight=dict(enumerate(weight)))
 
 loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
 print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
 loss, accuracy = model.evaluate(X_test_nn, y_test_nn, verbose=False)
 print("Testing Accuracy:  {:.4f} Loss: {:.4f}".format(accuracy, loss))
 
-plot_model(model, to_file='model.png')
+plot_model(model, to_file='only_nn.png')
 
 def testset():
     X_testset = []
@@ -172,11 +166,34 @@ def testset():
     tags_nn = [encod_res[i] for i in pred_nn]
     print("Pred of nn:", tags_nn[0:10])
 
+    import langid
+    from sklearn.metrics import accuracy_score
+
+    res = []
+    for i in testset_orig:
+        lang = langid.classify(i)
+        if lang[0]=='en':
+            res.append("rel")
+        else:
+            res.append("irr")
+
+    final_tags = []
+    for i in range(len(X_testset)):
+        if tags_nn[i] == "irr":
+            final_tags.append("irr")
+        else:
+            final_tags.append("rel")
+
+    print(accuracy_score(res, final_tags))
+
+
     final_tags = tags_nn
 
-    print("First 15 final tags:", final_tags[0:15])
+    print("Tags stats: pos({}), neg({}), neu({}), irr({})".format(final_tags.count("pos"), final_tags.count("neg"),
+    final_tags.count("neu"), final_tags.count("irr")))
+
     print("Starting write the result into file...")
-    fw = open("output_only_nn.txt", "w")
+    fw = open("only_nn.txt", "w")
     for i in range(len(X_testset)):
         fw.write(str(ids_list[i])+","+str(final_tags[i])+","+str(comp_list[i])+str(testset_orig[i]))
     print("Done!")

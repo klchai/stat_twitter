@@ -12,7 +12,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
 from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
@@ -30,7 +30,7 @@ lemmatizer = WordNetLemmatizer()
 
 def tokenize(tweet,tag=None):
     tokens=[]
-    ponctuation=[".",";","!",",","-","'",'"',"\n"]
+    ponctuation=[".",";","!",",","-","'",'"',"&","\n"]
     for p in ponctuation:
         tweet=tweet.replace(p," ")
     for word in tweet.split():
@@ -92,7 +92,7 @@ with open("./train.txt","r") as file:
 print("All tweets are loaded.")
 # SVM
 tweets_svm = [" ".join(tokens) for tokens in X_svm]
-tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 2), stop_words='english')
+tfidf = TfidfVectorizer(min_df=3, norm='l2', ngram_range=(1, 2), stop_words='english')
 
 print("Creating Vectors of tweets...")
 features = tfidf.fit_transform(tweets_svm)
@@ -138,7 +138,7 @@ X_train_nn, X_test_nn, y_train_nn, y_test_nn = train_test_split(X_nn, dummy_y, t
 
 max_sequence_length = max([len(tokens) for tokens in X_nn])
 MAX_TOKENS_NUM = len(all_words)
-EMBEDDING_DIMS = 120
+EMBEDDING_DIMS = 128
 
 vectorize_layer = TextVectorization(
   max_tokens=MAX_TOKENS_NUM,
@@ -157,14 +157,14 @@ model.add(layers.Dense(3, activation='softmax'))
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
 
 print("Fitting Neural Network...")
-model.fit(X_train_nn, y_train_nn, epochs=10, class_weight=dict(enumerate(weight)))
+model.fit(X_train_nn, y_train_nn, epochs=12, class_weight=dict(enumerate(weight)))
 
 loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
 print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
 loss, accuracy = model.evaluate(X_test_nn, y_test_nn, verbose=False)
 print("Testing Accuracy:  {:.4f} Loss: {:.4f}".format(accuracy, loss))
 
-plot_model(model, to_file='model.png')
+plot_model(model, to_file='svm_nn.png')
 
 def testset():
     X_testset = []
@@ -193,16 +193,37 @@ def testset():
     pred_nn = np.argmax(model.predict(X_testset_nn), axis=1)
     tags_nn = [encod_res[i] for i in pred_nn]
 
-    final_tags = []
+    import langid
+    res = []
+    for i in testset_orig:
+        lang = langid.classify(i)
+        if lang[0]=='en':
+            res.append("rel")
+        else:
+            res.append("irr")
+    print("Accurate irr nums:",res.count("irr"))
+
+    irr_tags = []
     for i in range(len(X_testset)):
         if pred_svm[i] == "irr":
+            irr_tags.append("irr")
+        else:
+            irr_tags.append("rel")
+    print("SVM predicted irr nums:",irr_tags.count("irr"))
+    print(accuracy_score(res, irr_tags))
+
+    final_tags = []
+    for i in range(len(X_testset)):
+        if pred_svm[i]=="irr":
             final_tags.append("irr")
         else:
             final_tags.append(tags_nn[i])
 
-    print("First 15 final tags:", final_tags[0:15])
+    print("Tags stats: pos({}), neg({}), neu({}), irr({})".format(final_tags.count("pos"), final_tags.count("neg"),
+    final_tags.count("neu"), final_tags.count("irr")))
+
     print("Starting write the result into file...")
-    fw = open("output.txt", "w")
+    fw = open("svm_nn.txt", "w")
     for i in range(len(X_testset)):
         fw.write(str(ids_list[i])+","+str(final_tags[i])+","+str(comp_list[i])+str(testset_orig[i]))
     print("Done!")
