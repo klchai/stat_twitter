@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from numpy import dstack
+import langid
 
 import nltk
 nltk.download("stopwords")
@@ -9,11 +9,8 @@ from nltk.stem import WordNetLemmatizer
 
 from sklearn import svm
 from sklearn.preprocessing import LabelEncoder
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
@@ -92,7 +89,7 @@ with open("./train.txt","r") as file:
 print("All tweets are loaded.")
 # SVM
 tweets_svm = [" ".join(tokens) for tokens in X_svm]
-tfidf = TfidfVectorizer(min_df=1, norm='l2', ngram_range=(1, 3), stop_words='english')
+tfidf = TfidfVectorizer(min_df=3, norm='l2', ngram_range=(1, 2), stop_words='english')
 
 print("Creating Vectors of tweets...")
 features = tfidf.fit_transform(tweets_svm)
@@ -172,11 +169,21 @@ def testset():
             tokens = tokenize(tweet)
             X_testset.append(tokens)
 
+    res = []
+    for i in testset_orig:
+        lang = langid.classify(i)
+        if lang[0]=='en':
+            res.append("rel")
+        else:
+            res.append("irr")
+
     X_testset_to_pred = [" ".join(tokens) for tokens in X_testset]
     testset_vector = tfidf.transform(X_testset_to_pred)
     print("Predicting irrelated and related tweets...")
     pred_svm = svc.predict(testset_vector)
 
+    print("IRR Label accuracy:", accuracy_score(res, pred_svm))
+    
     X_testset_nn = np.array(X_testset_to_pred)
     print("Predicting tags...")
     pred_nn = np.argmax(model.predict(X_testset_nn), axis=1)
@@ -197,6 +204,7 @@ def testset():
     print("Done!")
 
 def main():
+    testset()
     tweet = input("Type a tweet : \n")
     tweet_vector = tfidf.transform([tweet])
     prediction = svc.predict(tweet_vector)
@@ -207,8 +215,7 @@ def main():
         tweet_to_predict = [" ".join(tokenize(tweet))]
         tweet_to_predict = np.array(tweet_to_predict)
         prediction = np.argmax(model.predict(tweet_to_predict), axis=1)
-        print(f"This tweet is {encod_res[prediction[0]]})
+        print(f"This tweet is {encod_res[prediction[0]]}")
 
 if __name__ == "__main__":
-    #main()
-    testset()
+    main()
