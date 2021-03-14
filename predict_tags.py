@@ -9,12 +9,9 @@ from nltk.stem import WordNetLemmatizer
 
 from sklearn import svm
 from sklearn.preprocessing import LabelEncoder
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 import tensorflow as tf
@@ -98,6 +95,8 @@ def create_model_svm(X_svm, y_svm):
     X_train_svm, X_test_svm, y_train_svm, y_test_svm = train_test_split(features, y_svm, test_size=0.2, random_state=0)
     svc = svm.SVC(kernel='rbf', class_weight='balanced')
     svc.fit(X_train_svm, y_train_svm)
+    pred_svc = svc.predict(X_test_svm)
+    print("Accuracy of SVM:", accuracy_score(y_test_svm, pred_svc))
     return svc, tfidf
 
 def create_model_nn(X_nn, y_nn):
