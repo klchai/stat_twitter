@@ -132,7 +132,7 @@ model.add(layers.Dense(4, activation='softmax'))
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
 
 print("Fitting Neural Network...")
-model.fit(X_train_nn, y_train_nn, epochs=12, class_weight=dict(enumerate(weight)))
+model.fit(X_train_nn, y_train_nn, epochs=10, class_weight=dict(enumerate(weight)))
 
 loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
 print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
@@ -160,11 +160,11 @@ def testset():
 
     X_testset_to_pred = [" ".join(tokens) for tokens in X_testset]
     X_testset_nn = np.array(X_testset_to_pred)
+    print("===Only NN Model===")
 
     print("Predicting tags...")
     pred_nn = np.argmax(model.predict(X_testset_nn), axis=1)
     tags_nn = [encod_res[i] for i in pred_nn]
-    print("Pred of nn:", tags_nn[0:10])
 
     import langid
     from sklearn.metrics import accuracy_score
@@ -177,6 +177,8 @@ def testset():
         else:
             res.append("irr")
 
+    print("Langid predicted irr nums:",res.count("irr"))
+
     final_tags = []
     for i in range(len(X_testset)):
         if tags_nn[i] == "irr":
@@ -184,8 +186,9 @@ def testset():
         else:
             final_tags.append("rel")
 
-    print(accuracy_score(res, final_tags))
+    print("NN predicted irr nums:",final_tags.count("irr"))
 
+    print(accuracy_score(res, final_tags))
 
     final_tags = tags_nn
 

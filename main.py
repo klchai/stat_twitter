@@ -9,12 +9,9 @@ from nltk.stem import WordNetLemmatizer
 
 from sklearn import svm
 from sklearn.preprocessing import LabelEncoder
-from sklearn.neighbors import KNeighborsClassifier
-from sklearn.linear_model import LogisticRegression
 from sklearn.utils.class_weight import compute_class_weight
-from sklearn.feature_extraction.text import TfidfVectorizer, CountVectorizer
-from sklearn.ensemble import RandomForestClassifier, VotingClassifier
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.model_selection import train_test_split, cross_val_score
 from sklearn.metrics import classification_report, confusion_matrix, accuracy_score
 
 import tensorflow as tf
@@ -157,7 +154,7 @@ model.add(layers.Dense(3, activation='softmax'))
 model.compile(loss='categorical_crossentropy', optimizer='adam', metrics=['categorical_accuracy'])
 
 print("Fitting Neural Network...")
-model.fit(X_train_nn, y_train_nn, epochs=12, class_weight=dict(enumerate(weight)))
+model.fit(X_train_nn, y_train_nn, epochs=10, class_weight=dict(enumerate(weight)))
 
 loss, accuracy = model.evaluate(X_train_nn, y_train_nn, verbose=False)
 print("Training Accuracy: {:.4f} Loss: {:.4f}".format(accuracy, loss))
@@ -185,6 +182,7 @@ def testset():
 
     X_testset_to_pred = [" ".join(tokens) for tokens in X_testset]
     testset_vector = tfidf.transform(X_testset_to_pred)
+    print("===SVM+NN Model===")
     print("Predicting irrelated and related tweets...")
     pred_svm = svc.predict(testset_vector)
 
@@ -201,7 +199,7 @@ def testset():
             res.append("rel")
         else:
             res.append("irr")
-    print("Accurate irr nums:",res.count("irr"))
+    print("Langid predicted irr nums:",res.count("irr"))
 
     irr_tags = []
     for i in range(len(X_testset)):
